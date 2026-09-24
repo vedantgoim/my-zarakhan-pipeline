@@ -39,11 +39,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Configure Google Credentials
+        run: |
+          mkdir -p /tmp/gcp
+          cat << 'EOF' > /tmp/gcp/service_account.json
+          ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          EOF
+
       - name: Run Cloud Ingestion Pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: /tmp/gcp/service_account.json
           CLOUD_MODE: "true"
         run: |
           ARGS="--cloud"

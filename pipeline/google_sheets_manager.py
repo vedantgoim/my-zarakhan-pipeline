@@ -59,25 +59,59 @@ class GoogleSheetsManager:
                 "https://www.googleapis.com/auth/drive"
             ]
 
-            # Case 1: creds_str is a file path
-            if os.path.exists(self.creds_str):
-                creds = Credentials.from_service_account_file(self.creds_str, scopes=scopes)
-                self.client = gspread.authorize(creds)
-            # Case 2: creds_str is a JSON string (typical for GitHub Secrets)
-            elif self.creds_str.strip().startswith("{"):
-                info = json.loads(self.creds_str)
-                creds = Credentials.from_service_account_info(info, scopes=scopes)
-                self.client = gspread.authorize(creds)
-            else:
-                print("[GoogleSheetsManager] Invalid service account credentials format.")
+            raw = (self.creds_str or "").strip()
+            # Strip outer quotes if any
+            if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+                raw = raw[1:-1].strip()
+
+            creds = None
+
+            # Strategy 1: Direct JSON content (from GitHub Secrets)
+            if "{" in raw and "}" in raw:
+                try:
+                    start = raw.find("{")
+                    end = raw.rfind("}") + 1
+                    info = json.loads(raw[start:end])
+                    creds = Credentials.from_service_account_info(info, scopes=scopes)
+                except Exception as json_err:
+                    print(f"[GoogleSheetsManager] JSON parse failed: {json_err}")
+
+            # Strategy 2: File path (e.g. /tmp/service_account.json or relative to repo root)
+            if not creds:
+                candidates = [Path(raw)]
+                if len(raw) < 300:
+                    from .config import ROOT_DIR
+                    candidates.append(ROOT_DIR / raw)
+                    candidates.append(ROOT_DIR / ".secrets" / "service_account.json")
+                    candidates.append(Path("/tmp/service_account.json"))
+
+                for p in candidates:
+                    if p.exists() and p.is_file() and p.stat().st_size > 50:
+                        try:
+                            creds = Credentials.from_service_account_file(str(p), scopes=scopes)
+                            break
+                        except Exception:
+                            pass
+
+            if not creds:
+                print(f"[GoogleSheetsManager] Could not load service account (received {len(raw)} characters).")
                 return
 
-            if self.sheet_id:
-                self.sheet = self.client.open_by_key(self.sheet_id)
-                try:
-                    self.worksheet = self.sheet.worksheet(self.tab_name)
-                except Exception:
-                    # Fallback to first sheet
+            self.client = gspread.authorize(creds)
+
+            clean_sheet_id = (self.sheet_id or "").strip().strip("'\"")
+            if clean_sheet_id:
+                self.sheet = self.client.open_by_key(clean_sheet_id)
+                # Try configured tab, then 'Sheet1', then first worksheet
+                for attempt in [self.tab_name, "Sheet1", "Zara Khan Calendar"]:
+                    if not attempt:
+                        continue
+                    try:
+                        self.worksheet = self.sheet.worksheet(attempt)
+                        break
+                    except Exception:
+                        pass
+                if not self.worksheet:
                     self.worksheet = self.sheet.get_worksheet(0)
 
         except Exception as e:
