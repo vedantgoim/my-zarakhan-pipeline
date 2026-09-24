@@ -38,15 +38,19 @@ class GoogleSheetsManager:
         service_account_creds: Optional[str] = None,
         tab_name: Optional[str] = None
     ):
-        self.sheet_id = sheet_id or GOOGLE_SHEET_ID
-        self.creds_str = service_account_creds or GOOGLE_SERVICE_ACCOUNT_JSON
+        self.sheet_id = (sheet_id or GOOGLE_SHEET_ID or os.getenv("GOOGLE_SHEET_ID", "")).strip().strip("'\"")
+        self.creds_str = (
+            service_account_creds
+            or GOOGLE_SERVICE_ACCOUNT_JSON
+            or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+            or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+        )
         self.tab_name = tab_name or GOOGLE_SHEETS_TAB_NAME
         self.client = None
         self.sheet = None
         self.worksheet = None
 
-        if self.creds_str:
-            self._authenticate()
+        self._authenticate()
 
     def _authenticate(self):
         """Authenticates with Google Sheets API using service account credentials."""
@@ -66,56 +70,106 @@ class GoogleSheetsManager:
 
             creds = None
 
-            # Strategy 1: Direct JSON content (from GitHub Secrets)
+            # Strategy 1: Direct JSON content (from GitHub Secrets or inline env)
             if "{" in raw and "}" in raw:
                 try:
                     start = raw.find("{")
                     end = raw.rfind("}") + 1
                     info = json.loads(raw[start:end])
                     creds = Credentials.from_service_account_info(info, scopes=scopes)
+                    print(f"[GoogleSheetsManager] Authenticated via inline JSON for: {creds.service_account_email}")
                 except Exception as json_err:
-                    print(f"[GoogleSheetsManager] JSON parse failed: {json_err}")
+                    print(f"[GoogleSheetsManager] Inline JSON parse failed: {json_err}")
 
-            # Strategy 2: File path (e.g. /tmp/service_account.json or relative to repo root)
+            # Strategy 2: File path (e.g. /tmp/gcp/service_account.json, GOOGLE_APPLICATION_CREDENTIALS, or local keys)
             if not creds:
-                candidates = [Path(raw)]
-                if len(raw) < 300:
+                candidates = []
+                if raw and len(raw) < 500:
+                    candidates.append(Path(raw))
                     from .config import ROOT_DIR
                     candidates.append(ROOT_DIR / raw)
-                    candidates.append(ROOT_DIR / ".secrets" / "service_account.json")
-                    candidates.append(Path("/tmp/service_account.json"))
 
-                for p in candidates:
-                    if p.exists() and p.is_file() and p.stat().st_size > 50:
-                        try:
-                            creds = Credentials.from_service_account_file(str(p), scopes=scopes)
+                env_app_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+                if env_app_creds:
+                    candidates.append(Path(env_app_creds))
+
+                candidates.append(Path("/tmp/gcp/service_account.json"))
+                candidates.append(Path("/tmp/service_account.json"))
+
+                from .config import ROOT_DIR
+                candidates.append(ROOT_DIR / ".secrets" / "service_account.json")
+                for sa_file in ROOT_DIR.glob("gen-lang-client-*.json"):
+                    candidates.append(sa_file)
+
+                # Deduplicate candidates preserving order
+                unique_candidates = []
+                seen = set()
+                for c in candidates:
+                    resolved = str(c.resolve()) if c.exists() else str(c)
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        unique_candidates.append(c)
+
+                for p in unique_candidates:
+                    if not p.exists() or not p.is_file():
+                        continue
+                    try:
+                        file_text = p.read_text(encoding="utf-8")
+                        if "{" in file_text and "}" in file_text:
+                            start = file_text.find("{")
+                            end = file_text.rfind("}") + 1
+                            info = json.loads(file_text[start:end])
+                            creds = Credentials.from_service_account_info(info, scopes=scopes)
+                            print(f"[GoogleSheetsManager] Authenticated via key file '{p}' for: {creds.service_account_email}")
                             break
-                        except Exception:
-                            pass
+                        else:
+                            creds = Credentials.from_service_account_file(str(p), scopes=scopes)
+                            print(f"[GoogleSheetsManager] Authenticated via service_account_file '{p}' for: {creds.service_account_email}")
+                            break
+                    except Exception as file_err:
+                        print(f"[GoogleSheetsManager] Candidate key file '{p}' failed: {file_err}")
 
             if not creds:
-                print(f"[GoogleSheetsManager] Could not load service account (received {len(raw)} characters).")
+                print(f"[GoogleSheetsManager] ERROR: No valid service account credentials found (raw input length: {len(raw)} chars).")
                 return
 
             self.client = gspread.authorize(creds)
 
             clean_sheet_id = (self.sheet_id or "").strip().strip("'\"")
-            if clean_sheet_id:
+            if not clean_sheet_id:
+                print("[GoogleSheetsManager] ERROR: Google Sheet ID is missing or empty.")
+                return
+
+            try:
                 self.sheet = self.client.open_by_key(clean_sheet_id)
-                # Try configured tab, then 'Sheet1', then first worksheet
-                for attempt in [self.tab_name, "Sheet1", "Zara Khan Calendar"]:
-                    if not attempt:
-                        continue
+            except Exception as sheet_err:
+                print(f"[GoogleSheetsManager] Failed to open Google Sheet '{clean_sheet_id}': {sheet_err}")
+                return
+
+            # Discover available worksheets
+            try:
+                available_titles = [ws.title for ws in self.sheet.worksheets()]
+            except Exception:
+                available_titles = []
+
+            for attempt in [self.tab_name, "Sheet1", "Zara Khan Calendar"]:
+                if attempt and attempt in available_titles:
                     try:
                         self.worksheet = self.sheet.worksheet(attempt)
                         break
                     except Exception:
                         pass
-                if not self.worksheet:
-                    self.worksheet = self.sheet.get_worksheet(0)
+
+            if not self.worksheet:
+                self.worksheet = self.sheet.get_worksheet(0)
+
+            if self.worksheet:
+                print(f"[GoogleSheetsManager] Connected to worksheet '{self.worksheet.title}' in Google Sheet.")
+            else:
+                print(f"[GoogleSheetsManager] Warning: Sheet opened but no worksheet could be selected.")
 
         except Exception as e:
-            print(f"[GoogleSheetsManager] Authentication failed: {e}")
+            print(f"[GoogleSheetsManager] Authentication setup failed: {e}")
 
     def is_connected(self) -> bool:
         """Returns True if successfully connected to the Google Sheet."""

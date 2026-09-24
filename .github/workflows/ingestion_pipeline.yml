@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       day:
-        description: "Filter by Day (e.g., 'Day 1', 'Day 3', or leave empty for all)"
+        description: "Filter by Day (e.g. 'Day 5', 'Day 3', or leave empty for all pending)"
         required: false
         default: ""
       limit:
@@ -15,7 +15,7 @@ on:
         required: false
         default: ""
       pending_only:
-        description: "Only process assets currently marked as PENDING"
+        description: "Only process assets currently marked as PENDING (uncheck to re-prompt existing)"
         type: boolean
         default: true
 
@@ -40,17 +40,27 @@ jobs:
           pip install -r requirements.txt
 
       - name: Configure Google Credentials
+        env:
+          GCP_SA_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
-          mkdir -p /tmp/gcp
-          cat << 'EOF' > /tmp/gcp/service_account.json
-          ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          EOF
+          python -c "
+          import os, pathlib
+          key = os.environ.get('GCP_SA_KEY', '').strip()
+          if key:
+              p = pathlib.Path('/tmp/gcp/service_account.json')
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(key, encoding='utf-8')
+              print(f'[CI Setup] Saved service account key ({len(key)} chars) to {p}')
+          else:
+              print('[CI Setup] WARNING: GOOGLE_SERVICE_ACCOUNT_JSON secret is empty or not set!')
+          "
 
       - name: Run Cloud Ingestion Pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: /tmp/gcp/service_account.json
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp/service_account.json
           CLOUD_MODE: "true"
         run: |
           ARGS="--cloud"

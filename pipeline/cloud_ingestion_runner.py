@@ -154,15 +154,26 @@ class CloudIngestionRunner:
         if step_summary_path and os.path.exists(os.path.dirname(step_summary_path)):
             try:
                 with open(step_summary_path, "a", encoding="utf-8") as f:
-                    f.write(f"## 🚀 Zara Khan Cloud Ingestion Summary\n\n")
-                    f.write(f"- **Target Sheet / Mode**: {'Google Sheets' if self.use_google_sheets else 'Local Excel'}\n")
+                    f.write("## Zara Khan Cloud Ingestion Summary\n\n")
+                    mode_str = "Google Sheets" if self.use_google_sheets else "Local Excel (Fallback)"
+                    f.write(f"- **Target Mode**: {mode_str}\n")
+                    if self.use_google_sheets and self.gs_manager.sheet_id:
+                        f.write(f"- **Sheet URL**: [Open Google Sheet](https://docs.google.com/spreadsheets/d/{self.gs_manager.sheet_id}/edit)\n")
+                    f.write(f"- **Filter Day**: `{day or 'All Days'}`\n")
+                    f.write(f"- **Filter Pending Only**: `{pending_only}`\n")
                     f.write(f"- **Total Assets Prompted**: {len(results)}\n")
-                    f.write(f"- **Status Set**: `READY_FOR_HIGGSFIELD`\n\n")
-                    f.write("| Asset ID | Status | Direct Reference | Prompt Snippet |\n")
-                    f.write("| :--- | :--- | :--- | :--- |\n")
-                    for r in results:
-                        u_snippet = f"[View]({r['direct_url']})" if r.get('direct_url') else "N/A"
-                        f.write(f"| `{r['asset_id']}` | `{r['status']}` | {u_snippet} | {r['prompt'][:60]}... |\n")
+                    f.write(f"- **Status Applied**: `READY_FOR_HIGGSFIELD`\n\n")
+
+                    if len(results) == 0:
+                        f.write("> [!NOTE]\n")
+                        f.write(f"> 0 assets matched the filter (`Day: {day or 'All'}`, `pending_only: {pending_only}`). If all assets for that day have already been prompted/generated, run with `pending_only: false` to re-prompt, or target a pending day like `Day 5`.\n\n")
+                    else:
+                        f.write("| Asset ID | Status | Direct Reference | Prompt Snippet |\n")
+                        f.write("| :--- | :--- | :--- | :--- |\n")
+                        for r in results:
+                            u_snippet = f"[View CDN]({r['direct_url']})" if r.get('direct_url') else "N/A"
+                            prompt_preview = (r['prompt'][:75] + "...") if len(r.get('prompt', '')) > 75 else r.get('prompt', '')
+                            f.write(f"| `{r['asset_id']}` | `{r['status']}` | {u_snippet} | {prompt_preview} |\n")
             except Exception as e:
                 print(f"[CloudIngestionRunner] Could not write GitHub Step Summary: {e}")
 
