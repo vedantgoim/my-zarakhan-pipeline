@@ -1,0 +1,181 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "Load VAE"
+      },
+      "inputs": {
+        "vae_name": "qwen_image_vae.safetensors"
+      }
+    },
+    "2": {
+      "class_type": "UnetLoaderGGUF",
+      "_meta": {
+        "title": "Unet Loader (GGUF)"
+      },
+      "inputs": {
+        "unet_name": "Krea-2-Turbo-Q8_0.gguf"
+      }
+    },
+    "3": {
+      "class_type": "CLIPLoader",
+      "_meta": {
+        "title": "Qwen3-VL Multimodal CLIP"
+      },
+      "inputs": {
+        "clip_name": "qwen3-vl-4b-heretic_int8.safetensors",
+        "type": "krea2",
+        "device": "default"
+      }
+    },
+    "4": {
+      "class_type": "Krea2OstrisEditModelPatch",
+      "_meta": {
+        "title": "Krea2 Reference Latents Patch"
+      },
+      "inputs": {
+        "model": [
+          "2",
+          0
+        ],
+        "kv_cache": true
+      }
+    },
+    "5": {
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": {
+        "title": "Character Preservation LoRA"
+      },
+      "inputs": {
+        "lora_name": "Krea2_Anything2RealCharacters-V1.safetensors",
+        "strength_model": 1.0,
+        "model": [
+          "4",
+          0
+        ]
+      }
+    },
+    "6": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "Load Base Avatar Asset (Zara Khan)"
+      },
+      "inputs": {
+        "image": "ZARA_KHAN.png"
+      }
+    },
+    "7": {
+      "class_type": "TextEncodeKrea2OstrisEdit",
+      "_meta": {
+        "title": "Positive Prompt with Avatar Ref"
+      },
+      "inputs": {
+        "clip": [
+          "3",
+          0
+        ],
+        "vae": [
+          "1",
+          0
+        ],
+        "image1": [
+          "6",
+          0
+        ],
+        "prompt": "A photorealistic portrait of Zara Khan standing inside a vintage heritage room with distressed white plaster walls, reading a handwritten letter near an old window. She has long, dark natural wavy hair styled in a soft half-up look, expressive warm brown eyes, and a graceful dignified profile. She is wearing a deep red cotton-silk kurti featuring delicate traditional Chikankari embroidery and gold floral motifs, paired with a matching deep red dupatta draped gracefully over her shoulder. Small vintage gold jhumkas adorn her ears. Soft, warm natural morning light streams through the weathered wooden window, illuminating her face and the paper she holds, casting gentle shadows across the rustic interior. Shot on 35mm lens, authentic film grain, high-end editorial photography, cinematic depth of field, 8k resolution."
+      }
+    },
+    "8": {
+      "class_type": "TextEncodeKrea2OstrisEdit",
+      "_meta": {
+        "title": "Negative Prompt with Avatar Ref"
+      },
+      "inputs": {
+        "clip": [
+          "3",
+          0
+        ],
+        "vae": [
+          "1",
+          0
+        ],
+        "image1": [
+          "6",
+          0
+        ],
+        "prompt": "cartoon, 3d render, plastic skin, smooth airbrushed skin, modern clothing, bright synthetic colors, heavy makeup, distorted anatomy, extra limbs, blur, low resolution, western aesthetic, artificial studio lighting"
+      }
+    },
+    "9": {
+      "class_type": "EmptyLatentImage",
+      "_meta": {
+        "title": "Dynamic Latent (896x1152)"
+      },
+      "inputs": {
+        "width": 896,
+        "height": 1152,
+        "batch_size": 1
+      }
+    },
+    "10": {
+      "class_type": "KSampler",
+      "_meta": {
+        "title": "KSampler Krea2"
+      },
+      "inputs": {
+        "seed": 915763870694,
+        "steps": 10,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "sgm_uniform",
+        "denoise": 1.0,
+        "model": [
+          "5",
+          0
+        ],
+        "positive": [
+          "7",
+          0
+        ],
+        "negative": [
+          "8",
+          0
+        ],
+        "latent_image": [
+          "9",
+          0
+        ]
+      }
+    },
+    "11": {
+      "class_type": "VAEDecode",
+      "_meta": {
+        "title": "VAE Decode"
+      },
+      "inputs": {
+        "samples": [
+          "10",
+          0
+        ],
+        "vae": [
+          "1",
+          0
+        ]
+      }
+    },
+    "12": {
+      "class_type": "SaveImage",
+      "_meta": {
+        "title": "Save Output Image"
+      },
+      "inputs": {
+        "filename_prefix": "ZaraKhan_DAY03_CAROUSEL_SLIDE_01",
+        "images": [
+          "11",
+          0
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "CheckpointLoaderSimple",
+      "_meta": {
+        "title": "CyberPony SDXL Checkpoint"
+      },
+      "inputs": {
+        "ckpt_name": "cyberrealisticPony_v180Coreshift.safetensors"
+      }
+    },
+    "2": {
+      "class_type": "CLIPTextEncode",
+      "_meta": {
+        "title": "Positive Prompt (Pony Syntax)"
+      },
+      "inputs": {
+        "text": "score_9, score_8_up, score_7_up, source_photo, photo of Zara Khan, young Indian woman with Awadhi heritage, expressive warm brown eyes, natural wavy dark hair, close-up shot focusing on hands, wearing delicate silver rings and stacked traditional silver bangles, writing in an old vintage Urdu notebook with lined paper, holding a pen, wearing a traditional Lucknowi Chikankari white kurta and dupatta with delicate floral embroidery, sitting at a wooden table with block-printed floral textile tablecloth, soft warm natural morning sunlight, golden hour ambiance, gentle shadows, highly detailed fabric texture, authentic cultural aesthetic",
+        "clip": [
+          "1",
+          1
+        ]
+      }
+    },
+    "3": {
+      "class_type": "CLIPTextEncode",
+      "_meta": {
+        "title": "Negative Prompt (Pony Filter)"
+      },
+      "inputs": {
+        "text": "score_4, score_5, score_6, source_anime, 3d, render, cartoon, illustration, drawing, airbrushed, smooth plastic skin, porcelain doll, bad anatomy, deformed fingers, extra limbs, blurry, distorted hands, extra fingers",
+        "clip": [
+          "1",
+          1
+        ]
+      }
+    },
+    "4": {
+      "class_type": "EmptyLatentImage",
+      "_meta": {
+        "title": "Dynamic Latent (832x1472)"
+      },
+      "inputs": {
+        "width": 832,
+        "height": 1472,
+        "batch_size": 1
+      }
+    },
+    "5": {
+      "class_type": "KSampler",
+      "_meta": {
+        "title": "Pass 1: Base SDXL Sampler"
+      },
+      "inputs": {
+        "seed": 830573999541,
+        "steps": 30,
+        "cfg": 5.5,
+        "sampler_name": "dpmpp_2m_sde_gpu",
+        "scheduler": "karras",
+        "denoise": 1.0,
+        "model": [
+          "1",
+          0
+        ],
+        "positive": [
+          "2",
+          0
+        ],
+        "negative": [
+          "3",
+          0
+        ],
+        "latent_image": [
+          "4",
+          0
+        ]
+      }
+    },
+    "6": {
+      "class_type": "VAEDecode",
+      "_meta": {
+        "title": "Base VAE Decode"
+      },
+      "inputs": {
+        "samples": [
+          "5",
+          0
+        ],
+        "vae": [
+          "1",
+          2
+        ]
+      }
+    },
+    "7": {
+      "class_type": "UltralyticsDetectorProvider",
+      "_meta": {
+        "title": "YOLO Face Detector"
+      },
+      "inputs": {
+        "model_name": "bbox/face_yolov8m.pt"
+      }
+    },
+    "8": {
+      "class_type": "FaceDetailer",
+      "_meta": {
+        "title": "Pass 2: Face & Eye Refiner"
+      },
+      "inputs": {
+        "image": [
+          "6",
+          0
+        ],
+        "model": [
+          "1",
+          0
+        ],
+        "clip": [
+          "1",
+          1
+        ],
+        "vae": [
+          "1",
+          2
+        ],
+        "guide_size": 512,
+        "guide_size_for": true,
+        "max_size": 1024,
+        "seed": 830573999542,
+        "steps": 20,
+        "cfg": 5.0,
+        "sampler_name": "dpmpp_2m_sde_gpu",
+        "scheduler": "karras",
+        "positive": [
+          "2",
+          0
+        ],
+        "negative": [
+          "3",
+          0
+        ],
+        "denoise": 0.35,
+        "feather": 5,
+        "noise_mask": true,
+        "force_inpaint": true,
+        "bbox_threshold": 0.5,
+        "bbox_dilation": 10,
+        "bbox_crop_factor": 3.0,
+        "sam_detection_hint": "center-1",
+        "sam_dilation": 0,
+        "sam_threshold": 0.93,
+        "sam_bbox_expansion": 0,
+        "sam_mask_hint_threshold": 0.7,
+        "sam_mask_hint_use_negative": "False",
+        "drop_size": 10,
+        "bbox_detector": [
+          "7",
+          0
+        ],
+        "wildcard": "",
+        "cycle": 1
+      }
+    },
+    "9": {
+      "class_type": "SaveImage",
+      "_meta": {
+        "title": "Save Refined Output"
+      },
+      "inputs": {
+        "filename_prefix": "ZaraKhan_DAY02_STORY_01",
+        "images": [
+          "8",
+          0
+        ]
+      }
+    }
+  }
+}
