@@ -140,14 +140,26 @@ class PipelineRunner:
                 )
                 return {"asset_id": asset_id, "status": "FAILED", "error": err}
 
-            workflow_prompt = WorkflowBuilder.build_cyberpony_workflow(
-                asset_id=asset_id,
-                post_type=post_type,
-                asset_type=asset_type,
-                positive_prompt=pos_prompt,
-                negative_prompt=neg_prompt
-            )
-            print(f"-> Dispatching job to ComfyUI (CyberPony SDXL + FaceDetailer)...")
+            if generator.lower() in ("flux_klein", "flux", "klein", "default"):
+                workflow_prompt = WorkflowBuilder.build_flux_klein_workflow(
+                    asset_id=asset_id,
+                    post_type=post_type,
+                    asset_type=asset_type,
+                    positive_prompt=pos_prompt,
+                    negative_prompt=neg_prompt,
+                    avatar_image_name="ZARA_KHAN.png"
+                )
+                print(f"-> Dispatching job to ComfyUI (Flux 2 Klein 9B + Avatar Reference)...")
+            else:
+                workflow_prompt = WorkflowBuilder.build_cyberpony_workflow(
+                    asset_id=asset_id,
+                    post_type=post_type,
+                    asset_type=asset_type,
+                    positive_prompt=pos_prompt,
+                    negative_prompt=neg_prompt
+                )
+                print(f"-> Dispatching job to ComfyUI (CyberPony SDXL + FaceDetailer)...")
+
             success, out_file, msg = self.comfyui_client.render_workflow(
                 asset_id=asset_id,
                 workflow_prompt=workflow_prompt

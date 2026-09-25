@@ -13,6 +13,12 @@ from .config import (
     CYBERPONY_FACE_STEPS,
     CYBERPONY_FACE_CFG,
     CYBERPONY_FACE_DENOISE,
+    FLUX_KLEIN_UNET,
+    FLUX_KLEIN_CLIP,
+    FLUX_KLEIN_VAE,
+    FLUX_KLEIN_STEPS,
+    FLUX_KLEIN_GUIDANCE,
+    FLUX_KLEIN_SAMPLER,
     ASPECT_RATIOS
 )
 
@@ -177,6 +183,176 @@ class WorkflowBuilder:
                     "images": ["6", 0]
                 }
             }
+
+        # Save workflow JSON to disk for inspection
+        wf_file = WORKFLOWS_DIR / f"{asset_id}_workflow.json"
+        try:
+            with open(wf_file, "w", encoding="utf-8") as f:
+                json.dump({"prompt": workflow}, f, indent=2)
+        except Exception:
+            pass
+
+        return {"prompt": workflow}
+
+    @classmethod
+    def build_flux_klein_workflow(
+        cls,
+        asset_id: str,
+        post_type: str,
+        asset_type: str,
+        positive_prompt: str,
+        negative_prompt: str = "",
+        seed: Optional[int] = None,
+        avatar_image_name: str = "ZARA_KHAN.png",
+        guidance: float = FLUX_KLEIN_GUIDANCE,
+        steps: int = FLUX_KLEIN_STEPS
+    ) -> Dict[str, Any]:
+        """
+        Builds a ComfyUI prompt API workflow for Flux 2 Klein 9B with avatar reference.
+        - UNET: flux-2-klein-9b_int8_convrot.safetensors
+        - CLIP: qwen_3_8b_fp4mixed.safetensors (type: flux2)
+        - VAE: FLUX.2-Klein-Base-9B-VAE.safetensors
+        - Avatar Conditioning: ReferenceLatent with ZARA_KHAN.png
+        - Sampler: SamplerCustomAdvanced + Flux2Scheduler + Euler
+        """
+        if seed is None:
+            seed = random.randint(100000000000, 999999999999)
+
+        dim = cls.get_dimensions(post_type, asset_type)
+        width = dim["width"]
+        height = dim["height"]
+
+        workflow = {
+            "1": {
+                "class_type": "UNETLoader",
+                "_meta": {"title": "Flux 2 Klein 9B UNET"},
+                "inputs": {
+                    "unet_name": FLUX_KLEIN_UNET,
+                    "weight_dtype": "default"
+                }
+            },
+            "2": {
+                "class_type": "CLIPLoader",
+                "_meta": {"title": "Qwen 3 8B Text Encoder (Flux2)"},
+                "inputs": {
+                    "clip_name": FLUX_KLEIN_CLIP,
+                    "type": "flux2"
+                }
+            },
+            "3": {
+                "class_type": "VAELoader",
+                "_meta": {"title": "Flux 2 Klein VAE"},
+                "inputs": {
+                    "vae_name": FLUX_KLEIN_VAE
+                }
+            },
+            "4": {
+                "class_type": "CLIPTextEncode",
+                "_meta": {"title": "Positive Prompt"},
+                "inputs": {
+                    "text": positive_prompt,
+                    "clip": ["2", 0]
+                }
+            },
+            "5": {
+                "class_type": "FluxGuidance",
+                "_meta": {"title": "Flux Guidance Scale"},
+                "inputs": {
+                    "guidance": guidance,
+                    "conditioning": ["4", 0]
+                }
+            },
+            "6": {
+                "class_type": "LoadImage",
+                "_meta": {"title": "Avatar Reference Image (Zara Khan)"},
+                "inputs": {
+                    "image": avatar_image_name
+                }
+            },
+            "7": {
+                "class_type": "VAEEncode",
+                "_meta": {"title": "Encode Avatar to Latent"},
+                "inputs": {
+                    "pixels": ["6", 0],
+                    "vae": ["3", 0]
+                }
+            },
+            "8": {
+                "class_type": "ReferenceLatent",
+                "_meta": {"title": "Condition with Avatar Latent"},
+                "inputs": {
+                    "conditioning": ["5", 0],
+                    "latent": ["7", 0]
+                }
+            },
+            "9": {
+                "class_type": "EmptyFlux2LatentImage",
+                "_meta": {"title": f"Target Latent ({width}x{height})"},
+                "inputs": {
+                    "width": width,
+                    "height": height,
+                    "batch_size": 1
+                }
+            },
+            "10": {
+                "class_type": "Flux2Scheduler",
+                "_meta": {"title": "Flux 2 Scheduler"},
+                "inputs": {
+                    "steps": steps,
+                    "width": width,
+                    "height": height
+                }
+            },
+            "11": {
+                "class_type": "KSamplerSelect",
+                "_meta": {"title": "Sampler Selection"},
+                "inputs": {
+                    "sampler_name": FLUX_KLEIN_SAMPLER
+                }
+            },
+            "12": {
+                "class_type": "RandomNoise",
+                "_meta": {"title": "Random Noise"},
+                "inputs": {
+                    "noise_seed": seed
+                }
+            },
+            "13": {
+                "class_type": "BasicGuider",
+                "_meta": {"title": "Basic Guider"},
+                "inputs": {
+                    "model": ["1", 0],
+                    "conditioning": ["8", 0]
+                }
+            },
+            "14": {
+                "class_type": "SamplerCustomAdvanced",
+                "_meta": {"title": "Custom Advanced Sampler"},
+                "inputs": {
+                    "noise": ["12", 0],
+                    "guider": ["13", 0],
+                    "sampler": ["11", 0],
+                    "sigmas": ["10", 0],
+                    "latent_image": ["9", 0]
+                }
+            },
+            "15": {
+                "class_type": "VAEDecode",
+                "_meta": {"title": "VAE Decode to Image"},
+                "inputs": {
+                    "samples": ["14", 0],
+                    "vae": ["3", 0]
+                }
+            },
+            "16": {
+                "class_type": "SaveImage",
+                "_meta": {"title": "Save Rendered Image"},
+                "inputs": {
+                    "filename_prefix": f"ZaraKhan_{asset_id}",
+                    "images": ["15", 0]
+                }
+            }
+        }
 
         # Save workflow JSON to disk for inspection
         wf_file = WORKFLOWS_DIR / f"{asset_id}_workflow.json"

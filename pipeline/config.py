@@ -39,6 +39,14 @@ CYBERPONY_FACE_STEPS = 20
 CYBERPONY_FACE_CFG = 5.0
 CYBERPONY_FACE_DENOISE = 0.35
 
+# Flux Klein 9B Model Weights & Settings (Local ComfyUI)
+FLUX_KLEIN_UNET = "flux-2-klein-9b_int8_convrot.safetensors"
+FLUX_KLEIN_CLIP = "qwen_3_8b_fp4mixed.safetensors"
+FLUX_KLEIN_VAE = "FLUX.2-Klein-Base-9B-VAE.safetensors"
+FLUX_KLEIN_STEPS = 20
+FLUX_KLEIN_GUIDANCE = 3.5
+FLUX_KLEIN_SAMPLER = "euler"
+
 # Dynamic Aspect Ratios for Instagram
 ASPECT_RATIOS = {
     "Story": {"width": 832, "height": 1472, "desc": "9:16 Portrait"},

@@ -78,7 +78,8 @@ Examples:
     parser.add_argument("--cloud", action="store_true", help="Run in cloud ingestion mode for Higgsfield (Google Sheets + direct URLs)")
     parser.add_argument("--sync-sheets", action="store_true", help="Upload and sync local Excel calendar to Google Sheet")
     parser.add_argument("--gemini-generate", action="store_true", help="Render images via Gemini API (gemini-3.1-flash-lite-image)")
-    parser.add_argument("--generator", choices=["comfyui", "gemini"], default="comfyui", help="Image generation backend (default: comfyui)")
+    parser.add_argument("--flux-klein", action="store_true", help="Render images via local Flux 2 Klein 9B + Avatar Reference on ComfyUI")
+    parser.add_argument("--generator", choices=["flux_klein", "comfyui", "gemini"], default="flux_klein", help="Image generation backend (default: flux_klein)")
     parser.add_argument("--limit", type=int, help="Maximum number of items to process")
     parser.add_argument("--status", action="store_true", help="Display calendar status summary and exit")
     parser.add_argument("--list", action="store_true", help="List assets matching filters and exit")
@@ -120,12 +121,17 @@ Examples:
         return
 
     # If no flags are provided, show status and help
-    if not (args.day or args.asset_id or args.dry_run or args.limit or args.gemini_generate):
+    if not (args.day or args.asset_id or args.dry_run or args.limit or args.gemini_generate or args.flux_klein):
         print_summary(manager)
         print("Tip: Run with --help to see all execution options, or use --cloud for cloud ingestion.\n")
         return
 
-    generator_engine = "gemini" if args.gemini_generate or args.generator == "gemini" else "comfyui"
+    if args.gemini_generate or args.generator == "gemini":
+        generator_engine = "gemini"
+    elif args.flux_klein or args.generator == "flux_klein":
+        generator_engine = "flux_klein"
+    else:
+        generator_engine = "comfyui"
 
     runner = PipelineRunner(calendar_manager=manager)
     runner.run_batch(

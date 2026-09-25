@@ -1,0 +1,213 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "UNETLoader",
+      "_meta": {
+        "title": "Flux 2 Klein 9B UNET"
+      },
+      "inputs": {
+        "unet_name": "flux-2-klein-9b_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "CLIPLoader",
+      "_meta": {
+        "title": "Qwen 3 8B Text Encoder (Flux2)"
+      },
+      "inputs": {
+        "clip_name": "qwen_3_8b_fp4mixed.safetensors",
+        "type": "flux2"
+      }
+    },
+    "3": {
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "Flux 2 Klein VAE"
+      },
+      "inputs": {
+        "vae_name": "FLUX.2-Klein-Base-9B-VAE.safetensors"
+      }
+    },
+    "4": {
+      "class_type": "CLIPTextEncode",
+      "_meta": {
+        "title": "Positive Prompt"
+      },
+      "inputs": {
+        "text": "A photorealistic morning editorial portrait of Zara Khan sitting at a vintage outdoor cafe in South Mumbai. She has long, dark natural wavy hair, expressive warm brown eyes, and a relaxed, radiant smile. She is wearing a crisp ivory linen button-up shirt and delicate layered gold necklaces, holding an artisanal espresso cup near an open novel. Soft, warm morning sunlight filters through wooden louvers and tropical palm foliage, casting gentle shadows across rustic terracotta tile flooring. Authentic 35mm film grain, high-end editorial photography, shallow depth of field, 8k resolution, authentic Zara Khan likeness and facial features.",
+        "clip": [
+          "2",
+          0
+        ]
+      }
+    },
+    "5": {
+      "class_type": "FluxGuidance",
+      "_meta": {
+        "title": "Flux Guidance Scale"
+      },
+      "inputs": {
+        "guidance": 3.5,
+        "conditioning": [
+          "4",
+          0
+        ]
+      }
+    },
+    "6": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "Avatar Reference Image (Zara Khan)"
+      },
+      "inputs": {
+        "image": "ZARA_KHAN.png"
+      }
+    },
+    "7": {
+      "class_type": "VAEEncode",
+      "_meta": {
+        "title": "Encode Avatar to Latent"
+      },
+      "inputs": {
+        "pixels": [
+          "6",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ]
+      }
+    },
+    "8": {
+      "class_type": "ReferenceLatent",
+      "_meta": {
+        "title": "Condition with Avatar Latent"
+      },
+      "inputs": {
+        "conditioning": [
+          "5",
+          0
+        ],
+        "latent": [
+          "7",
+          0
+        ]
+      }
+    },
+    "9": {
+      "class_type": "EmptyFlux2LatentImage",
+      "_meta": {
+        "title": "Target Latent (896x1152)"
+      },
+      "inputs": {
+        "width": 896,
+        "height": 1152,
+        "batch_size": 1
+      }
+    },
+    "10": {
+      "class_type": "Flux2Scheduler",
+      "_meta": {
+        "title": "Flux 2 Scheduler"
+      },
+      "inputs": {
+        "steps": 20,
+        "width": 896,
+        "height": 1152
+      }
+    },
+    "11": {
+      "class_type": "KSamplerSelect",
+      "_meta": {
+        "title": "Sampler Selection"
+      },
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "12": {
+      "class_type": "RandomNoise",
+      "_meta": {
+        "title": "Random Noise"
+      },
+      "inputs": {
+        "noise_seed": 101010
+      }
+    },
+    "13": {
+      "class_type": "BasicGuider",
+      "_meta": {
+        "title": "Basic Guider"
+      },
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "conditioning": [
+          "8",
+          0
+        ]
+      }
+    },
+    "14": {
+      "class_type": "SamplerCustomAdvanced",
+      "_meta": {
+        "title": "Custom Advanced Sampler"
+      },
+      "inputs": {
+        "noise": [
+          "12",
+          0
+        ],
+        "guider": [
+          "13",
+          0
+        ],
+        "sampler": [
+          "11",
+          0
+        ],
+        "sigmas": [
+          "10",
+          0
+        ],
+        "latent_image": [
+          "9",
+          0
+        ]
+      }
+    },
+    "15": {
+      "class_type": "VAEDecode",
+      "_meta": {
+        "title": "VAE Decode to Image"
+      },
+      "inputs": {
+        "samples": [
+          "14",
+          0
+        ],
+        "vae": [
+          "3",
+          0
+        ]
+      }
+    },
+    "16": {
+      "class_type": "SaveImage",
+      "_meta": {
+        "title": "Save Rendered Image"
+      },
+      "inputs": {
+        "filename_prefix": "ZaraKhan_DAY101_POST_01",
+        "images": [
+          "15",
+          0
+        ]
+      }
+    }
+  }
+}
