@@ -59,27 +59,39 @@ class PipelineRunner:
         # Stage 1: Reference Media Ingestion
         ref_media_path = None
         direct_url = None
+        clothing_ref = record.get("clothing_ref")
+        clothing_ref_url = clothing_ref if (clothing_ref and str(clothing_ref).startswith("http")) else None
+        clothing_ref_path = None
+
         if not skip_download and ref_url:
-            print(f"-> Resolving reference media from: {ref_url}...")
+            print(f"-> Resolving background reference media from: {ref_url}...")
             local_path, direct_url = self.media_downloader.ingest_reference(asset_id, ref_url)
             if local_path and local_path.exists():
                 ref_media_path = local_path
-                print(f"   Saved reference to: {ref_media_path}")
+                print(f"   Saved background reference to: {ref_media_path}")
             else:
-                print(f"   Reference download skipped or not found.")
+                print(f"   Background reference download skipped or not found.")
         elif skip_download:
             cached = self.media_downloader.get_cached_path(asset_id)
             if cached:
                 ref_media_path = cached
-                print(f"   Using existing reference cache: {ref_media_path}")
+                print(f"   Using existing background reference cache: {ref_media_path}")
+
+        # Ingest clothing reference if provided as URL
+        if clothing_ref_url and not skip_download:
+            print(f"-> Resolving wardrobe reference media from: {clothing_ref_url}...")
+            c_path, _ = self.media_downloader.ingest_reference(f"{asset_id}_clothing", clothing_ref_url)
+            if c_path and c_path.exists():
+                clothing_ref_path = c_path
+                print(f"   Saved wardrobe reference to: {clothing_ref_path}")
 
         # Update reference path in calendar
         if ref_media_path:
             rel_ref_path = f"references/{ref_media_path.name}"
             self.calendar_manager.update_asset(asset_id, ref_media_path=rel_ref_path)
 
-        # Stage 2: Multimodal Prompt Synthesis
-        print(f"-> Synthesizing diffusion prompts via Gemini ({self.prompt_synthesizer.model_name})...")
+        # Stage 2: Multimodal Prompt Synthesis with 3 Reference Images
+        print(f"-> Synthesizing diffusion prompts via Gemini ({self.prompt_synthesizer.model_name}) with 3 references...")
         pos_prompt, neg_prompt = self.prompt_synthesizer.synthesize_prompt(
             asset_id=asset_id,
             post_type=post_type,
@@ -87,7 +99,9 @@ class PipelineRunner:
             notes=notes,
             caption=caption,
             reference_media_path=ref_media_path,
-            reference_image_url=direct_url
+            reference_image_url=direct_url or ref_url,
+            clothing_ref_path=clothing_ref_path,
+            clothing_ref_url=clothing_ref_url
         )
         print(f"   Positive Prompt: {pos_prompt[:120]}...")
         print(f"   Negative Prompt: {neg_prompt[:80]}...")
@@ -121,12 +135,14 @@ class PipelineRunner:
 
         # Stage 4: Generation Mode (Gemini Image API vs ComfyUI)
         if generator.lower() == "gemini":
-            print(f"-> Dispatching job to Gemini Image API ({self.gemini_generator.model_name})...")
+            print(f"-> Dispatching job to Gemini Image API ({self.gemini_generator.model_name}) with 3 references...")
             success, out_file, msg = self.gemini_generator.generate_image(
                 asset_id=asset_id,
                 prompt=pos_prompt,
                 reference_image_path=ref_media_path,
-                reference_image_url=direct_url
+                reference_image_url=direct_url or ref_url,
+                clothing_ref_path=clothing_ref_path,
+                clothing_ref_url=clothing_ref_url
             )
         else:
             print(f"-> Checking ComfyUI instance at {self.comfyui_client.base_url}...")

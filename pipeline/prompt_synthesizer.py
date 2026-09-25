@@ -76,9 +76,12 @@ class PromptSynthesizer:
         notes: Optional[str],
         caption: Optional[str] = None,
         reference_media_path: Optional[Path] = None,
-        reference_image_url: Optional[str] = None
+        reference_image_url: Optional[str] = None,
+        clothing_ref_path: Optional[Path] = None,
+        clothing_ref_url: Optional[str] = None,
+        avatar_ref_path: Optional[Path] = None
     ) -> Optional[ModelPromptBody]:
-        """Synthesizes structured ModelPromptBody schema via Gemini Structured Outputs."""
+        """Synthesizes structured ModelPromptBody schema via Gemini Structured Outputs with 3 reference images."""
         if not self.client:
             return None
 
@@ -87,17 +90,24 @@ class PromptSynthesizer:
 
         contents = []
 
-        # 1. Base Avatar Reference Image
-        if self.avatar_image:
-            contents.append("Base Character Avatar Reference (Zara Khan):")
-            contents.append(self.avatar_image)
+        # 1. Base Avatar Reference Image (Zara Khan Identity)
+        avatar_to_use = self.avatar_image
+        if avatar_ref_path and avatar_ref_path.exists():
+            try:
+                avatar_to_use = Image.open(avatar_ref_path)
+            except Exception:
+                pass
 
-        # 2. Visual Inspiration Reference Image (Local file or Cloud URL)
+        if avatar_to_use:
+            contents.append("[REFERENCE 1: CHARACTER AVATAR IDENTITY (Zara Khan)]")
+            contents.append(avatar_to_use)
+
+        # 2. Background / Setting Reference Image
         ref_loaded = False
         if reference_media_path and reference_media_path.exists():
             try:
                 ref_img = Image.open(reference_media_path)
-                contents.append("Visual Reference Image (composition, mood, lighting, props):")
+                contents.append("[REFERENCE 2: BACKGROUND & SETTING INSPIRATION (Environment, Architecture, Lighting)]")
                 contents.append(ref_img)
                 ref_loaded = True
             except Exception as e:
@@ -113,10 +123,36 @@ class PromptSynthesizer:
                     img_bytes = resp.read()
                     if len(img_bytes) > 500:
                         ref_img = Image.open(io.BytesIO(img_bytes))
-                        contents.append("Visual Reference Image (composition, mood, lighting, props):")
+                        contents.append("[REFERENCE 2: BACKGROUND & SETTING INSPIRATION (Environment, Architecture, Lighting)]")
                         contents.append(ref_img)
             except Exception as e:
-                print(f"[PromptSynthesizer] Could not load reference image from URL {reference_image_url}: {e}")
+                print(f"[PromptSynthesizer] Could not load background reference from URL {reference_image_url}: {e}")
+
+        # 3. Wardrobe / Attire Reference Image (What she will wear)
+        cloth_loaded = False
+        if clothing_ref_path and clothing_ref_path.exists():
+            try:
+                c_img = Image.open(clothing_ref_path)
+                contents.append("[REFERENCE 3: WARDROBE & ATTIRE INSPIRATION (What she will wear)]")
+                contents.append(c_img)
+                cloth_loaded = True
+            except Exception as e:
+                print(f"[PromptSynthesizer] Could not load clothing reference {clothing_ref_path}: {e}")
+
+        if not cloth_loaded and clothing_ref_url and clothing_ref_url.startswith("http"):
+            try:
+                req = urllib.request.Request(
+                    clothing_ref_url,
+                    headers={'User-Agent': 'Mozilla/5.0'}
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    c_bytes = resp.read()
+                    if len(c_bytes) > 500:
+                        c_img = Image.open(io.BytesIO(c_bytes))
+                        contents.append("[REFERENCE 3: WARDROBE & ATTIRE INSPIRATION (What she will wear)]")
+                        contents.append(c_img)
+            except Exception as e:
+                print(f"[PromptSynthesizer] Could not load clothing reference from URL {clothing_ref_url}: {e}")
 
         user_instruction = f"""
 Asset ID: {asset_id}
@@ -125,14 +161,20 @@ Content Description: {desc if desc else "N/A"}
 Notes (STRICT OVERRIDES): {notes_text if notes_text else "None"}
 Caption Context: {caption if caption else "None"}
 
-Please analyze all provided references and generate the structured diffusion prompt body.
+Please analyze all 3 provided references:
+1. Reference 1: Ground Zara Khan's facial features, natural warm brown eyes, wavy dark hair, and Awadhi poise.
+2. Reference 2: Ground the background setting, architecture, cafe patio, props, lighting, and composition.
+3. Reference 3: Ground the wardrobe, clothing style, fabric embroidery, and silhouette for what she is wearing.
+Strict Notes Overrides apply to fine-tune details. Respond with the structured ModelPromptBody JSON.
 """
         contents.append(user_instruction)
 
-        # Try designated model (e.g. gemini-3.8-flash) with fallback to gemini-3.5-flash-lite on 503 spikes
+        # Try designated model (e.g. gemini-3.5-flash-lite) with fallback
         models_to_try = [self.model_name]
-        if self.model_name != "gemini-3.5-flash-lite":
+        if "gemini-3.5-flash-lite" not in models_to_try:
             models_to_try.append("gemini-3.5-flash-lite")
+        if "gemini-3.1-flash-lite" not in models_to_try:
+            models_to_try.append("gemini-3.1-flash-lite")
 
         for m in models_to_try:
             try:
@@ -163,7 +205,10 @@ Please analyze all provided references and generate the structured diffusion pro
         notes: Optional[str],
         caption: Optional[str] = None,
         reference_media_path: Optional[Path] = None,
-        reference_image_url: Optional[str] = None
+        reference_image_url: Optional[str] = None,
+        clothing_ref_path: Optional[Path] = None,
+        clothing_ref_url: Optional[str] = None,
+        avatar_ref_path: Optional[Path] = None
     ) -> Tuple[str, str]:
         """Synthesizes positive and negative prompts, returning tuple (pos, neg)."""
         body = self.synthesize_prompt_body(
@@ -173,7 +218,10 @@ Please analyze all provided references and generate the structured diffusion pro
             notes=notes,
             caption=caption,
             reference_media_path=reference_media_path,
-            reference_image_url=reference_image_url
+            reference_image_url=reference_image_url,
+            clothing_ref_path=clothing_ref_path,
+            clothing_ref_url=clothing_ref_url,
+            avatar_ref_path=avatar_ref_path
         )
 
         if body and body.positive_prompt:
